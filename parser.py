@@ -4,59 +4,11 @@ import requests
 import json
 from pprint import pprint
 
-# class Question:
-#     def __init__(self, question, answers):
-#         self.question = question
-#         self.answers = answers
-
-
-# class Configs:
-#     __instance = None
-
-#     __xlsFile = None
-#     __sheetName = None
-#     __link = None
-
-#     questions = []
-
-#     def setXls(self, _xls):
-#         self.__xlsFile = _xls
-#     def getXls(self):
-#         return self.__xlsFile
-#     def setSheet(self, _sheet):
-#         self.__sheetName = _sheet
-#     def getSheet(self):
-#         return self.__sheetName
-#     def setLink(self, _link):
-#         self.__link = _link
-#     def getLink(self):
-#         return self.__link
-#     def addQuestion(self, q):
-#         if isinstance(q, Question):
-#             self.questions.append(q)
-#         else:
-#             print('Error: Cannot add question of type', type(q))
-#     def addQuestions(self, qs):
-#         for q in q:
-#             self.addQuestion(q)
-
-#     def instance():
-#         if Configs.__instance is None:
-#             Configs()
-#         return Configs.__instance
-
-#     def __init__(self):
-#         Configs.__instance = self
-
-# config = Configs.instance()
-
 other_answers = []
 
 def importData(json_file):
     with open(json_file) as inf:
         configs = json.load(inf)
-    import pprint
-    pprint.pprint(configs)
     if configs.get('xlsFile') is not None:
         return ingestXLS(configs)
     else:
@@ -82,19 +34,36 @@ def ingestXLS(configs):
     data = []
 
     question_parsing = {}
+    ranked_questions = []
+    question_ids = {}
     if (questions := configs.get('questions')) is not None:
         prompts = readRow(sheet, 0)
         for q in questions:
             try:
-                index = prompts.index(q['question'])
-                select = q.get('select-all')
-                if select is None:
-                    select = False
-                question_parsing[index] = (q['answers'], select)
+                question = q['question']
+                q_format = q.get('format')
+                if q_format == 'ranked':
+                    indices = []
+                    for i, p in enumerate(prompts):
+                        if p[:p.rfind('[') - 1] == question:
+                            indices.append(i)
+                    if len(indices) == 0:
+                        raise ValueError()
+                    indices.sort(key=lambda i: prompts[i])
+                    ranked_questions.append(indices)
+                else:
+                    indices = [prompts.index(question)]
+                if (q_id := q.get('id')) is not None:
+                    question_ids[q_id] = indices[0]
+                for i in indices:
+                    question_parsing[i] = (q['answers'], q_format)
             except:
                 if (optional := q.get('optional')) is not None and optional:
                     continue
                 raise ValueError("Did not find question: \n{}".format(q['question']))
+
+    extra_indices = [j for i in ranked_questions for j in i[1:]]
+    extra_indices.sort(reverse=True)
 
     for row in range(1,sheet.nrows):
     # for row in range(1, 2):
@@ -103,15 +72,16 @@ def ingestXLS(configs):
         # Additional parsing of inputs
         for n, d in enumerate(datum):
             if d is not None:
-                if d is '':
+                if d == '':
                     datum[n] = -1#'No Answer'
+                    print(n)
                     continue
                 if len(d) > 2 and d[-2:] == '.0':
                     # Remove trailing .0 from ints that were read in as doubles
                     datum[n] = d[0:-2]
                 if (tup := question_parsing.get(n)) is not None:
-                    answers, select_all = tup
-                    if select_all:
+                    answers, q_format = tup
+                    if q_format == 'select-all':
                         l = d.split(',') # Assume select-all-that-apply answers don't have commas
                         if l[-1] == '':
                             l.pop()
@@ -120,15 +90,18 @@ def ingestXLS(configs):
 
                     datum[n] = [defaultIndex(answers, i.strip()) for i in l]
 
+        for ranked in ranked_questions:
+            datum[ranked[0]] = [datum[i][0] for i in ranked]
+        for extra in extra_indices:
+            del datum[extra]
         data.append(datum)
 
-    # sort by location (1) then name (0)
-    #data = sorted(data, key=itemgetter(1,0))
-    return data
+    return data, question_parsing, question_ids
 
 def ingestForm(configs):
     raise NotImplementedError("Coming soon")
 
 if __name__ == "__main__":
-    print(importData(sys.argv[1]))
-    pprint(other_answers)
+    data, qs, ids = importData(sys.argv[1])
+    pprint(data)
+    # pprint(other_answers)
