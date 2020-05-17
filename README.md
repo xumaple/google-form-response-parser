@@ -3,13 +3,13 @@ In using Google Forms for any sort of data collection, oftentimes the native dat
 
 FRP attempts to make analyzing data easier by taking in either the Google-Form output excel sheet or a native Form-editing web link (coming soon!) and graphing that data in easy-to-configure ways using python's matplotlib. 
 
-Because the data retrieved by Google Forms is generally one user per response, the most common use case is to graph data by analyzing the number of people who responded in a certain way. Thus, the only type of graph that FRP currently offers is the bar graph. Furthermore, for the sake of simplicity in analysis, FRP is best used in conjunction with questions that have a relatively small number of  possible answers (generally, <10, but depends on the size of the dataset).
+Because the data retrieved by Google Forms is generally one user per response, the most common use case is to graph data by analyzing the number of people who responded in a certain way. Thus, the only type of graph that FRP currently offers is the bar graph. Furthermore, for the sake of simplicity in analysis, FRP is best used in conjunction with questions that have a relatively small number of possible answers (generally, <10, but depends on the size of the dataset), and not really meant to analyze free-response type questions at all. 
 
 You can use FRP to filter and graph data in many ways, and this tutorial will show you everything FRP has to offer. 
 
 # How to use FRP
 
-To run FRP, simply download the parser.py file located in this repository. FRP has no Python2 compatibility, and is best when run with Python 3.7. 
+To run FRP, simply clone this repository or download the parser.py file located in the repo. FRP has no Python2 compatibility, and is best when run with Python 3.7. 
 
 FRP's dependencies are: 
 
@@ -19,7 +19,18 @@ FRP's dependencies are:
 
 FRP has only one required input: a json-format file that serves as the configuration for how FRP should parse and analyze data. 
 
-To run FRP, simply use `python3 parser.py [json filename]`. 
+To run FRP, simply use `python3 parser.py [flags] [json filename]`. 
+
+Based on the contents of the JSON, as well as any input flags, FRP may produce output, and may save files to disk. 
+
+## Flags
+
+All flags are optional:
+
++ `--no-show` When used, FRP will not show the final produced graphs and simply close them when done.
++ `--no-save` When used, will override the JSON configuration file and not save any files to disk.
++ `--verbose` or `-v` When used, will produce more verbose output, such as what files are saved to disk.
++ `--show-others` When used, will output the list of all responses which were deemed "Other" by FRP, based on the answers to questions inputted in the JSON configuration. For more information, see the [Configuring Questions](#configuring-questions) section.
 
 ## Configuring the JSON
 
@@ -67,7 +78,7 @@ Each question has the following identifiers:
 
 + `question` specifies the **exact** name of a question from the Google Form, which must be placed somewhere in Row 1 of the corresponding excel. It is required.
 + `id` is a string that serves as some sort of identifying tag for this specific question. Although not required, it is highly recommended, because without it this question cannot be used in analysis. 
-+ `answers` is a list containing all exact values that FRP should use during analysis. Although not required, it is highly recommended, because all values not included in this list will be considered "other" data that will be discarded.
++ `answers` is a list containing all exact values that FRP should use during analysis. Although not required, it is highly recommended, because all values not included in this list will be considered "other" data that will be discarded, and printed when the `--show-others` flag is enabled.
 + `format` is a string that tells FRP to expect a special format for this question, as detailed below. It is optional - when ommitted, FRP will assume the standard question format. Supported special formats:
     + `select-all` refers to the Multiple-checkboxes type of question, where users can select any number of the given responses.
     + `ranked` refers to a multiple-grid type system where the row describes a ranking system, and the column describes the metrics to be ranked. (For clarity, see question 3 of [this form](https://forms.gle/5EihhpiSNxchXT1j6) and the following example.) *Note that FRP currently does not support the tranposed version of this question, where columns describe the ranking system instead of the row. Furthermore, the ranking system currently only supports being sorted in rank alphabetically.*
@@ -125,47 +136,122 @@ Once the questions have been inputted into this configuration file, we can use t
 }
 ```
 
-Each graph has the following identifiers: 
+Each graph must be directly associated with exactly one question, and generally, the number of bars in the bar graph corresponds to the number of answers that said question has, with one-bar-per-question. Each graph has the following identifiers: 
 
 + `title` is the title of the graph. It is optional - the default is no title. 
 + `x-axis` and `y-axis` are the respective axis labels. They are optional - the default is no label.
 + `save-as` is the graph's saved filename. It is an extension of the `output-dir` optionally specified earlier. It follows the naming and filetype conventions from matplotlib's **savefig** function. It is optional - without it, the graph will not be saved to disk.
 + `config` is a required path which holds the configurations for this specific graph: 
-    + 	`id` references the question ID from which data for each of the bars of the graph are represented. It is required. 
+    + 	`id` references the question ID that this graph is directly associated to, from which data for each of the bars of the graph are represented. It is required. 
     +  `percentage` is a boolean flag that specifies whether the bar graph data should be represented as an exact count or as a percentile of the total of every point represented by the graph. It is optional - the default value is false.
     +  `filters` is a list of filters that will be applied to the dataset to limit the amount of data displayed by the graph. It is optional - the default is no filters. FRP supports the following types of filters:
         +  Filtering by another question, with the following identifiers:
             +  `id` refers to the question ID of the question in which data will be filtered. It is required. 
-            +  `answers` is a list that represents the specific whitelisted answers of that question that will be allowed through the filter. It is optional; however, if not specified, all data will be filtered out. Answers in the list are not specified by their exact values, but rather by the indices of the answers declared earlier in the JSON questions section. (For further clarification, see the [Examples](#example-use-cases) section.)
+            +  `answers` is a list that represents the specific whitelisted answers of that question that will be allowed through the filter. It is optional; however, if not specified, all data will be filtered out. Answers in the list are not specified by their exact values, but rather by the indices of the answers declared earlier in the JSON questions section. (For further clarification, see the [Examples](#using-filters) section.)
 
-                This filter currently does not allow answers to be blacklisted, only whitelisted. 
+                This filter currently does not allow answers to be blacklisted, only whitelisted. Filters also currently do not support filtering based on ranked-format questions.
 
         +  More options will become available at users' requests.
-    +  `ranks`
-    +  `answer`
-+ `bars` is  
++ `bars` is a list of each of the graph's bars' labels. Because graphs will genearlly have one bar per answer, this method allows the user to shorten each labels' length at his own discretion by creating a new label for each answer altogether (answers on Google Forms are sometimes pretty long). It is optional - by default, numbers will be used as labels for each bar. 
 
+Given the configured filters and other miscellaneous information, FRP graphs each bar graph based on the number of users who answered each answer to the question specified at `analysis/config/id`.
 
 **Example**
 
-```json
+In this example, we graph the basic idea of how many people like each pizza: 
 
+```json
+{
+    ...
+    "analysis": [
+        {
+            "title": "People's Favorite Pizzas",
+            "x-axis": "Pizza type",
+            "y-axis": "Number of people who like this pizza",
+            "save-as": "everyones_fav_pizzas.jpg",
+            "config": {
+                "id": "fav_pizza",
+                "percentage": false
+            },
+            "bars": ["Pep.", "Cheese", "Meat"]
+        }
+    ]
+}
 ```
+
+However, what if we only wanted to see this result for the people who like Honey Nut Cheerios? In that case, we add a filter, and change the other semantic configs accordingly (the changes are bolded):
+
+<pre>
+{
+    ...
+    "analysis": [
+        {
+            "title": "People<b> Who Like Cheerios</b>'s Favorite Pizzas",
+            "x-axis": "Pizza type",
+            "y-axis": "Number of people who like this pizza",
+            "save-as": "<b>cheerio_lovers</b>_fav_pizzas",
+            "config": {
+                "id": "fav_pizza",
+                <b>"filters": [
+                    {
+                        "id": "cereal_weeee",
+                        "answers": [1]
+                    }
+                ],</b>
+                "percentage": false
+            },
+            "bars": ["Pep.", "Cheese", "Meat"]
+        }
+    ]
+}
+</pre>
 
 This example outlines the most basic graphing use case. For more complex situations, see the [Examples](#example-use-cases) section.
 
+#### Other identifiers
+
+Specifically for graphing ***ranked-format*** questions, there are two more identifiers within the `analysis/config` subpath that can be used:
+
++  `ranks` is an identifier to a list which signifies the specific answer ranks that are handled per user, eg. only looking at each user's most or least ranked item, or a variety.
++  `answer` is a unique identifier which changes the x-axis of the graph from being one-answer-per-bar, to one-rank-per-bar. Thus, the number of bars for this graph
+
+For more information on these additional identifiers, see the [Examples](#ranked-format-specific-identifiers) section.
+
 #### Graphing Sub-plots
 
-*To be updated soon*
+One of *matplotlib*'s biggest features is allowing users to plot several sub-plots in the same picture. FRP also leverages this, but in a more organized fashion. 
+
+For each graph, if the graph contains the following three identifiers, then FRP will graph sub-plots instead of the regular graph: 
+
++ `n-rows` and `n-cols` are positive integers which signify the number of rows and columns, respectively, of sub-plots the graph should contain. 
++ `sub-plots` is a list of all individual configurations for the sub-plots. The number of elements in this list must be equal to `n-rows * n-cols`. When graphing, they will be graphed in standard English reading order, ie. left-to-right, top-to-bottom. 
+
+Then, except for `save-as`, which remains as the graph's optional identifier, all other identifiers are expected to exist (if not optional) within each of the elements of the `sub-plots` list. 
+
+For more detailed information, see the [Examples](#sub-plot-examples) section.
 
 
 ### Example use cases
 
-This section will continue to use the *examples.xls* in this repo. It will also continue to use the same *examples.json* file, execpt we will add additional graphs to the `analysis` subpath. 
+This section will continue to use the *examples.xls* in this repo. It will also continue to use the same *examples.json* file, except we will add additional graphs to the `analysis` subpath. 
+
+#### Using filters
+
+*To be updated soon*
+
+#### Ranked format-specific identifiers
+
+*To be updated soon*
+
+#### Sub-plot Examples
 
 *To be updated soon*
 
 ## Misc.
+
+### Number systems
+
+For all lists in the JSON, FRP will assume a zero-based indexing system.
 
 ### Layout of the XLS File
 
@@ -176,6 +262,8 @@ Although this parser is meant to be used in conjunction with Google Forms, which
 ### Configuring matplotlib
 
 *To be updated soon*
+
+--
 
 # Known bugs
 

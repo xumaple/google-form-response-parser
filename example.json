@@ -1,0 +1,43 @@
+{
+    "xlsFile": "example.xls",
+    "sheetName": "Sheet1",
+    "output-dir": "example-outputs/",
+    "questions": [
+        {
+            "question": "What is your favorite type of pizza?",
+            "id": "fav_pizza",
+            "answers": ["Pepperoni", "Cheese", "Meatlovers"]
+        },
+        {
+            "question": "How would you rank your seasons? (1 is most favorite, 4 least favorite)",
+            "id": "seasons_rank",
+            "answers": ["Spring", "Summer", "Autumn", "Winter"],
+            "format": "ranked"
+        },
+        {
+            "question": "What breakfast cereals do you like? (select all that apply)",
+            "id": "cereal_weeee",
+            "answers": ["Honey Nut Cheerios", "Fruit loops", "Lucky Charms"], 
+            "format": "select-all"
+        }
+    ],
+    "analysis": [
+        {
+            "title": "People Who Like Cheerios's Favorite Pizzas",
+            "x-axis": "Pizza type",
+            "y-axis": "Number of people who like this pizza",
+            "save-as": "cheerio_lovers_fav_pizzas",
+            "config": {
+                "id": "fav_pizza",
+                "filters": [
+                    {
+                        "id": "cereal_weeee",
+                        "answers": [1]
+                    }
+                ],
+                "percentage": false
+            },
+            "bars": ["Pep.", "Cheese", "Meat"]
+        }
+    ]
+}
