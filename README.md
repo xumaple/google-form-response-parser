@@ -160,7 +160,7 @@ Given the configured filters and other miscellaneous information, FRP graphs eac
 
 In this example, we graph the basic idea of how many people like each pizza: 
 
-```json
+```
 {
     ...
     "analysis": [
