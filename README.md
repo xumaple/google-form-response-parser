@@ -50,7 +50,7 @@ FRP does not currently support reading in data from multiple excel files or mult
 
 To inform FRP of all the questions that it needs to analyze, we need to tell it what the exact question name is, what each of the answers are, and also what type of question it is, through this configuration file. All questions are elements of the list under the `questions` subpath. 
 
-```json
+```
 {
     "xlsFile": "example.xls",
     "sheetName": "Sheet1",
@@ -107,7 +107,7 @@ Each question has the following identifiers:
 
 Once the questions have been inputted into this configuration file, we can use those question IDs and answers to generate graphs. Each graph is an element of the list under the `analysis` subpath. 
 
-```json
+```
 {
     "xlsFile": "example.xls",
     "sheetName": "Sheet1",
