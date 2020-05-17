@@ -15,6 +15,9 @@ SHOW_OTHERS = False
 DEBUG_BREAK_EARLY = False
 NO_ANSWER_FLAG = '_'
 
+def plotConfig():
+    plt.style.use('seaborn')
+
 other_answers = []
 saved_files = []
 
@@ -133,22 +136,7 @@ def ingestXLS(configs):
 def ingestForm(configs):
     raise NotImplementedError("Coming soon")
 
-def plotConfig():
-    # plt.axis('on')
-    plt.style.use('seaborn')
-
 def analyzeData(configs, data, question_answers, ids):
-    # import numpy as np
-    # import matplotlib.pyplot as plt
-    # height = [3, 12, 5, 18, 45]
-    # bars = ('A', 'B', 'C', 'D', 'E')
-    # y_pos = np.arange(len(bars))
-    # plt.bar(y_pos, height, color=(0.2, 0.4, 0.6, 0.6))
-     
-    # # Custom Axis title
-    # plt.xlabel('title of the xlabel', fontweight='bold', color = 'orange', fontsize='17', horizontalalignment='center')
-    # plt.show()
-    # return
     plotConfig()
     graphs = configs.get('analysis')
     if graphs is None:
@@ -336,7 +324,6 @@ def add_filter(sub_plot, id, answer_num, answer):
     return new_sub_plot
 
 if __name__ == "__main__":
-    print(sys.argv)
     if '--no-show' in sys.argv:
         SHOW_PLOTS = False
         del sys.argv[sys.argv.index('--no-show')]
@@ -352,7 +339,15 @@ if __name__ == "__main__":
     if '--show-others' in sys.argv:
         SHOW_OTHERS = True
         del sys.argv[sys.argv.index('--show-others')]
-    with open(sys.argv[1]) as inf:
-        configs = json.load(inf)
+
+    if len(sys.argv) != 2:
+        print('Usage: python3 parser.py [json config file]')
+        exit(1)
+    try:
+        with open(sys.argv[1]) as inf:
+            configs = json.load(inf)
+    except:
+        print('ERROR: Could not load json file', sys.argv[1])
+        exit(1)
     data, qs, ids = importData(configs)
     analyzeData(configs, data, qs, ids)
