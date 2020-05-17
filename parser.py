@@ -89,7 +89,7 @@ def ingestXLS(configs):
                 optional = q.get('optional')
                 if optional is not None and optional:
                     continue
-                raise ValueError("Did not find question: \n{}".format(q['question']))
+                raise ValueError("Did not find answer to question: \n{}".format(q['question']))
 
     extra_indices = [j for i in ranked_questions for j in i[1:]]
     extra_indices.sort(reverse=True)
@@ -159,7 +159,7 @@ def analyzeData(configs, data, question_answers, ids):
                     answers = question_answers[ids[sort_by_id]][0]
                     num_answers = len(answers)
                     for ans in range(num_answers):
-                        sub_plots.insert(i + ans + 1, add_filter(sub, sort_by_id, ans, answers[0]))
+                        sub_plots.insert(i + ans + 1, add_filter(sub, sort_by_id, ans, answers[ans]))
                     del sub_plots[i]
 
             if len(sub_plots) != nrows * ncols:
@@ -313,6 +313,7 @@ def filter_data(datum, f, form):
     return datum[0] in f.get('answers')
 
 def add_filter(sub_plot, id, answer_num, answer):
+    print(answer)
     new_sub_plot = copy.deepcopy(sub_plot)
     filters = new_sub_plot['config'].get('filters')
     if filters is None:
