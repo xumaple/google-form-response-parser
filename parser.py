@@ -9,17 +9,29 @@ import numpy as np
 from pprint import pprint
 
 SHOW_PLOTS = True
-SAVE_PLOTS = False
+SAVE_PLOTS = True
+VERBOSE = False
+SHOW_OTHERS = False
 DEBUG_BREAK_EARLY = False
 NO_ANSWER_FLAG = '_'
 
 other_answers = []
+saved_files = []
 
 def importData(configs):
     if configs.get('xlsFile') is not None:
-        return ingestXLS(configs)
+        ret = ingestXLS(configs)
     else:
-        ingestForm(configs)
+        ret = ingestForm(configs)
+
+    if VERBOSE:
+        print('{} other answers were not documented.'.format(len(other_answers)))
+    if SHOW_OTHERS:
+        print('Other answers that were not documented:')
+        for a in other_answers:
+            print('\t{}'.format(a))
+
+    return ret
 
 def readRow(sheet, row):
     return [str(sheet.cell(row, i).value) for i in range(2, sheet.ncols)]
@@ -162,7 +174,6 @@ def analyzeData(configs, data, question_answers, ids):
                         sub_plots.insert(i + ans + 1, add_filter(sub, sort_by_id, ans, answers[0]))
                     del sub_plots[i]
 
-            pprint(sub_plots)
             if len(sub_plots) != nrows * ncols:
                 # TODO error
                 print('err')
@@ -171,8 +182,8 @@ def analyzeData(configs, data, question_answers, ids):
             sub_plots = [graph]
             axes = [axes]
 
-        for ax, graph in zip(axes, sub_plots):
-            conf = graph['config']
+        for ax, sp in zip(axes, sub_plots):
+            conf = sp['config']
             filtered_data = data
             filters = conf.get('filters')
             if filters is not None:
@@ -191,16 +202,16 @@ def analyzeData(configs, data, question_answers, ids):
             else:
                 NotImplementedError("no such type")
             labels = range(len(scores))
-            if graph.get('bars') is not None:
-                labels = graph['bars']
+            if sp.get('bars') is not None:
+                labels = sp['bars']
             # print(labels, scores)
             bars = ax.bar(labels, scores)
-            if not graph.get('no-show-responses') == True:
+            if not sp.get('no-show-responses') == True:
                 autolabel(bars, ax, conf.get('percentage'))
 
-            title, x, y = graph.get('title'), graph.get('x-axis'), graph.get('y-axis')
+            title, x, y = sp.get('title'), sp.get('x-axis'), sp.get('y-axis')
             if title is not None:
-                ax.set_title(title + ' - {} responses'.format(num_responses) if not graph.get('no-show-responses') == True else '')
+                ax.set_title(title + ' - {} responses'.format(num_responses) if not sp.get('no-show-responses') == True else '')
             if x is not None:
                 ax.set_xlabel(x)
             if y is not None:
@@ -210,7 +221,15 @@ def analyzeData(configs, data, question_answers, ids):
             output_dir = configs.get('output-dir')
             if output_dir is None:
                 output_dir = ''
-            fig.savefig(output_dir + graph['save-as'])
+            o = output_dir + graph['save-as']
+            fig.savefig(o)
+
+            if VERBOSE:
+                print('Saving file {} to disk.'.format(o))
+                if o in saved_files:
+                    print('WARNING: File {} was already saved in this program. Overwriting.'.format(o))
+                saved_files.append(o)
+
     if SHOW_PLOTS:
         plt.show()
 
@@ -317,14 +336,23 @@ def add_filter(sub_plot, id, answer_num, answer):
     return new_sub_plot
 
 if __name__ == "__main__":
+    print(sys.argv)
     if '--no-show' in sys.argv:
         SHOW_PLOTS = False
         del sys.argv[sys.argv.index('--no-show')]
     if '--no-save' in sys.argv:
         SAVE_PLOTS = False
         del sys.argv[sys.argv.index('--no-save')]
+    if '--verbose' in sys.argv:
+        VERBOSE = True
+        del sys.argv[sys.argv.index('--verbose')]
+    if '-v' in sys.argv:
+        VERBOSE = True
+        del sys.argv[sys.argv.index('-v')]
+    if '--show-others' in sys.argv:
+        SHOW_OTHERS = True
+        del sys.argv[sys.argv.index('--show-others')]
     with open(sys.argv[1]) as inf:
         configs = json.load(inf)
     data, qs, ids = importData(configs)
     analyzeData(configs, data, qs, ids)
-    # pprint(other_answers)
