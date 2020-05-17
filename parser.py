@@ -2,15 +2,16 @@ import sys
 from xlrd import open_workbook
 import requests
 import json
+import copy
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
 from pprint import pprint
 
-SHOW_PLOTS = False
-SAVE_PLOTS = True
+SHOW_PLOTS = True
+SAVE_PLOTS = False
 DEBUG_BREAK_EARLY = False
-NO_ANSWER_FLAG = 'NO_ANSWER'
+NO_ANSWER_FLAG = '_'
 
 other_answers = []
 
@@ -24,6 +25,8 @@ def readRow(sheet, row):
     return [str(sheet.cell(row, i).value) for i in range(2, sheet.ncols)]
 
 def defaultIndex(arr, val, default=None):
+    if isinstance(val, str):
+        val = val.strip()
     try:
         return arr.index(val)
     except ValueError:
@@ -88,7 +91,8 @@ def ingestXLS(configs):
                     continue
                 if len(d) > 2 and d[-2:] == '.0':
                     # Remove trailing .0 from ints that were read in as doubles
-                    datum[n] = int(d[0:-2])
+                    d = int(d[0:-2])
+                    datum[n] = d
                 tup = question_parsing.get(n)
                 if tup is not None:
                     answers, q_format = tup
@@ -99,7 +103,7 @@ def ingestXLS(configs):
                     else: 
                         l = [d]
 
-                    datum[n] = [defaultIndex(answers, i.strip()) for i in l]
+                    datum[n] = [defaultIndex(answers, i) for i in l]
 
         for ranked in ranked_questions:
             datum[ranked[0]] = [datum[i][0] for i in ranked]
@@ -138,41 +142,69 @@ def analyzeData(configs, data, question_answers, ids):
     if graphs is None:
         return
     for graph in graphs:
-        fig, ax = plt.subplots()
-        conf = graph['config']
-        filtered_data = data
-        filters = conf.get('filters')
-        if filters is not None:
-            for f in filters:
-                question_index = ids[f['id']]
-                form = question_answers[ids[f['id']]][1]
-                filtered_data = filter(lambda datum: filter_data(datum[question_index], f, form), filtered_data)
-            filtered_data = list(filtered_data)
-        form = question_answers[ids[conf['id']]][1]
-        if form == 'ranked':
-            scores, num_responses = score_ranked(conf, filtered_data, question_answers, ids)
-        elif form == 'select-all':
-            scores, num_responses = score_select_all(conf, filtered_data, question_answers, ids)
-        elif form is None:
-            scores, num_responses = score_regular(conf, filtered_data, question_answers, ids)
-        else:
-            NotImplementedError("no such type")
-            # print(scores)
-        labels = range(len(scores))
-        if graph.get('bars') is not None:
-            labels = graph['bars']
-        # print(labels, scores)
-        bars = ax.bar(labels, scores)
-        if not graph.get('no-show-responses') == True:
-            autolabel(bars, ax, conf.get('percentage'))
+        nrows, ncols, sub_plots = graph.get('nrows'), graph.get('ncols'), graph.get('sub-plots')
+        if nrows is not None and ncols is not None and sub_plots is not None:
+            fig, axes = plt.subplots(nrows=nrows, ncols=ncols)
+            # print(type(axes))
+            while len(axes) != nrows * ncols:
+                axes = [j for i in axes for j in i]
+            
+            for i, sub in enumerate(sub_plots):
+                c = sub.get('config')
+                if c is not None:
+                    sort_by_id = c.get('sort-by')
+                    if sort_by_id is None:
+                        continue
+                    del sub['config']['sort-by']
+                    answers = question_answers[ids[sort_by_id]][0]
+                    num_answers = len(answers)
+                    for ans in range(num_answers):
+                        sub_plots.insert(i + ans + 1, add_filter(sub, sort_by_id, ans, answers[0]))
+                    del sub_plots[i]
 
-        title, x, y = graph.get('title'), graph.get('x-axis'), graph.get('y-axis')
-        if title is not None:
-            ax.set_title(title + ' - {} responses'.format(num_responses) if not graph.get('no-show-responses') == True else '')
-        if x is not None:
-            ax.set_xlabel(x)
-        if y is not None:
-            ax.set_ylabel(y)
+            pprint(sub_plots)
+            if len(sub_plots) != nrows * ncols:
+                # TODO error
+                print('err')
+        else:
+            fig, axes = plt.subplots()
+            sub_plots = [graph]
+            axes = [axes]
+
+        for ax, graph in zip(axes, sub_plots):
+            conf = graph['config']
+            filtered_data = data
+            filters = conf.get('filters')
+            if filters is not None:
+                for f in filters:
+                    question_index = ids[f['id']]
+                    form = question_answers[ids[f['id']]][1]
+                    filtered_data = filter(lambda datum: filter_data(datum[question_index], f, form), filtered_data)
+                filtered_data = list(filtered_data)
+            form = question_answers[ids[conf['id']]][1]
+            if form == 'ranked':
+                scores, num_responses = score_ranked(conf, filtered_data, question_answers, ids)
+            elif form == 'select-all':
+                scores, num_responses = score_select_all(conf, filtered_data, question_answers, ids)
+            elif form is None:
+                scores, num_responses = score_regular(conf, filtered_data, question_answers, ids)
+            else:
+                NotImplementedError("no such type")
+            labels = range(len(scores))
+            if graph.get('bars') is not None:
+                labels = graph['bars']
+            # print(labels, scores)
+            bars = ax.bar(labels, scores)
+            if not graph.get('no-show-responses') == True:
+                autolabel(bars, ax, conf.get('percentage'))
+
+            title, x, y = graph.get('title'), graph.get('x-axis'), graph.get('y-axis')
+            if title is not None:
+                ax.set_title(title + ' - {} responses'.format(num_responses) if not graph.get('no-show-responses') == True else '')
+            if x is not None:
+                ax.set_xlabel(x)
+            if y is not None:
+                ax.set_ylabel(y)
 
         if SAVE_PLOTS and graph.get('save-as') is not None:
             output_dir = configs.get('output-dir')
@@ -189,7 +221,6 @@ def score_ranked(config, data, question_answers, ids):
 
     specific_answer_index = config.get('answer')
     if specific_answer_index is not None:
-        # print(answers)
         for user_answers in answers:
             try:
                 scores[user_answers.index(specific_answer_index)] += 1
@@ -246,6 +277,7 @@ def score_regular(config, data, question_answers, ids):
 def get_answers(config, data):
     index = ids[config['id']]
     answers = [data[i][index] for i in range(len(data))]
+    # pprint(data)
     return list(filter(lambda x: x != NO_ANSWER_FLAG, answers))
 
 def score_adjustments(config, scores):
@@ -265,6 +297,7 @@ def autolabel(rects, ax, is_percentage):
                     ha='center', va='bottom')
 
 def filter_data(datum, f, form):
+    # print(datum)
     answers = f.get('answers')
     if answers is None or len(answers) == 0:
         return False
@@ -272,10 +305,26 @@ def filter_data(datum, f, form):
         raise NotImplementedError("Coming soon")
     return datum[0] in f.get('answers')
 
+def add_filter(sub_plot, id, answer_num, answer):
+    new_sub_plot = copy.deepcopy(sub_plot)
+    filters = new_sub_plot['config'].get('filters')
+    if filters is None:
+        filters = []
+        new_sub_plot['config']['filters'] = filters
+    filters.append({"id": id, "answers": [answer_num]})
+    title = new_sub_plot.get('title', '')
+    new_sub_plot['title'] = '{}{}{}'.format(answer.capitalize(), ': ' if title != '' else '', title)
+    return new_sub_plot
+
 if __name__ == "__main__":
+    if '--no-show' in sys.argv:
+        SHOW_PLOTS = False
+        del sys.argv[sys.argv.index('--no-show')]
+    if '--no-save' in sys.argv:
+        SAVE_PLOTS = False
+        del sys.argv[sys.argv.index('--no-save')]
     with open(sys.argv[1]) as inf:
         configs = json.load(inf)
     data, qs, ids = importData(configs)
-    # pprint(ids)
     analyzeData(configs, data, qs, ids)
     # pprint(other_answers)
