@@ -415,7 +415,7 @@ Sub-plots are useful when the user desires graphs to be side-by-side. Oftentimes
 }
 </pre>
 
-To see what this graph looks like, visit the [example-outputs folder](https://github.com/xumaple/google-form-response-parser/blob/master/example-outputs/least_favorite_seasons_by_pizza.jpg). Note that this is just a 2-by-2 subplot, and our JSON is already extremely long and full of long sections that were mainly copy-pasted, except for a line or two or change. For larger subplots, the JSON would easily become unmanageable
+To see what this graph looks like, visit the [example-outputs folder](https://github.com/xumaple/google-form-response-parser/blob/master/example-outputs/least_favorite_seasons_by_pizza.jpg). Note that this is just a 2-by-2 subplot, and our JSON is already extremely long and full of long sections that were mainly copy-pasted, except for a line or two or change. For larger subplots, the JSON would easily become unmanageable.
 
 Thus, there is one shortcut field that can be used to change: the `sort-by`field, which takes in the question ID of the question to be varied-by-answer. It takes the place of the filter that specifically limits to one of the answers to said question, and is a field within the `analysis/sub-plot/config` subpath. Take a look at the following example: 
 
@@ -459,9 +459,9 @@ Thus, there is one shortcut field that can be used to change: the `sort-by`field
 }
 </pre>
 
-Comparing [this graph](https://github.com/xumaple/google-form-response-parser/blob/master/example-outputs/least_favorite_seasons_by_pizza_with_shortcut.jpg) with the previous, although the subplots are in a different shape (1x4 instead of 2x2), the graphs themselves are the same, but this version that uses the shortcut is much shorter. In fact, the shortcut is only being used in the latter of the two sub-plots in this example - the former is just a regular sub-plot. This shortcut is super useful! Some notes/caveats:
+Comparing [this graph](https://github.com/xumaple/google-form-response-parser/blob/master/example-outputs/least_favorite_seasons_by_pizza_with_shortcut.jpg) with the previous, although the subplots are in a different shape (1x4 instead of 2x2), the graphs themselves are the same, but this version that uses the shortcut has a much shorter JSON config. In fact, the shortcut is only being used in the latter of the two sub-plots in this example - the former is just a regular sub-plot. This shortcut is super useful! Some notes/caveats:
 
-+ The restriction that `nrows * ncols` is equal to the number of elements in sub_plots still applies. When the sort-by shortcut is used, FRP is actually automatically generating the other sub-plots before checking this restriction. 
++ The restriction that `nrows * ncols` must be equal to the number of elements in sub_plots still applies. When the sort-by shortcut is used, FRP is actually automatically generating the other sub-plots before checking this restriction. 
 + When the `sort-by` field is used, FRP will always generate 1 sub-plot per answer for the question specified. If the user wants to use a different algorithm to plot the sub-plots, it is not supported by this shortcut. 
 + FRP will always generate the sub-plots in order of the answers specifed in the JSON file. Thus, when they are plotted into the plot as a whole, they will also follow this order. If the user wants to use a different order, it is not supported by this shortcut. 
 + Note that using the `sort-by` field does not disqualify this sub-plot from using other filters. However, any such filters used in the same sub-plot as the `sort-by` field will be used in all sub-plots automatically that FRP generates from this field, as well. 
