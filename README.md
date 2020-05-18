@@ -27,10 +27,10 @@ Based on the contents of the JSON, as well as any input flags, FRP may produce o
 
 All flags are optional:
 
-+ `--no-show` When used, FRP will not show the final produced graphs and simply close them when done.
-+ `--no-save` When used, will override the JSON configuration file and not save any files to disk.
-+ `--verbose` or `-v` When used, will produce more verbose output, such as what files are saved to disk.
-+ `--show-others` When used, will output the list of all responses which were deemed "Other" by FRP, based on the answers to questions inputted in the JSON configuration. For more information, see the [Configuring Questions](#configuring-questions) section.
++ `--no-show`: When used, FRP will not show the final produced graphs and simply close them when done.
++ `--no-save`: When used, will override the JSON configuration file and not save any files to disk.
++ `--verbose` or `-v`: When used, will produce more verbose output, such as what files are saved to disk.
++ `--show-others`: When used, will output the list of all responses which were deemed "Other" by FRP, based on the answers to questions inputted in the JSON configuration. For more information, see the [Configuring Questions](#configuring-questions) section.
 
 ## Configuring the JSON
 
@@ -174,7 +174,8 @@ In this example, we graph the basic idea of how many people like each pizza:
                 "percentage": false
             },
             "bars": ["Pep.", "Cheese", "Meat"]
-        }
+        },
+        ...
     ]
 }
 ```
@@ -201,7 +202,8 @@ However, what if we only wanted to see this result for the people who like Honey
                 "percentage": false
             },
             "bars": ["Pep.", "Cheese", "Meat"]
-        }
+        },
+        ...
     ]
 }
 </pre>
@@ -297,7 +299,8 @@ Suppose I want to see each person's least favorite season. The `ranks` field is 
                 <b>"ranks": [3]</b>
             },
             "bars": <b>["Spring", "Summer", "Autumn", "Winter"]</b>
-        }
+        },
+        ...
     ]
 }
 </pre>
@@ -322,18 +325,149 @@ Suppose I want to see where people tended to rank Summer among their seasons. Th
                 <b>"answer": 1</b>
             },
             "bars": <b>["Love it!", "Pretty good", "Meh", "I hate it :("]</b>
-        }
+        },
+        ...
     ]
 }
 </pre>
 
-Notice that the `bars` field is no longer listing out labels for answers to the question, but rather rankings (this is described in [Other fields](#other fields)). Also notice that the `answer` field is a single value, so it is not possible to see how people rank multiple answers at once, at that does not have much plausible semantic value (but, if this is a requested feature, it can be implemented!).
+Notice that the `bars` field is no longer listing out labels for answers to the question, but rather rankings (this is described in [Other fields](#other fields)). Also notice that the `answer` field is a single value, so FRP cannot show how people rank multiple answers at once, as that does not have much plausible semantic value (but, if this is a requested feature, it can be implemented!).
 
 Although we won't show an example of this, each of these ranked-format fields can still be used in conjunction with filters of non-ranked questions. Using any such filters simply filters out data points as specified by each filter, before either of these fields analyze the data used in the graph.  
 
 #### Sub-plot Examples
 
-*To be updated soon*
+Sub-plots are useful when the user desires graphs to be side-by-side. Oftentimes, this may be because they want to compare similar data. As an example, suppose I have the previously drawn data of people's least favorite season, but I want to see how this data varies based on people's favorite pizza. In that case, we can use subplots, with the addition of filters, to draw our different sub-plots: 
+
+(Note - instead of bolding everything new, which is everything, the bolded parts will be the important parts - the rest is a lot of copy/paste)
+
+<pre>
+{
+    ...
+    "analysis": [
+        {
+            <b>"nrows": 2,
+            "ncols": 2,
+            "save-as": "least_favorite_seasons_by_pizza.jpg",
+            "sub-plots":</b> [
+                {
+                    "title": "Least Favorite Seasons",
+                    "x-axis": "Season",
+                    "y-axis": "Number of people who hate this season",
+                    "config": {
+                        "id": "seasons_rank",
+                        "ranks": [3]
+                    },
+                    "bars": ["Spring", "Summer", "Autumn", "Winter"]
+                }, 
+                {
+                    "title": "Least Favorite Seasons for Pepperoni Lovers",
+                    "x-axis": "Season",
+                    "y-axis": "Number of people who hate this season",
+                    "config": {
+                        "id": "seasons_rank",
+                        "ranks": [3],
+                        <b>"filters": [
+                            {
+                                "id": "fav_pizza",
+                                "answers": [0]
+                            }
+                        ]</b>
+                    },
+                    "bars": ["Spring", "Summer", "Autumn", "Winter"]
+                },
+                {
+                    "title": "Least Favorite Seasons for Cheese Lovers",
+                    "x-axis": "Season",
+                    "y-axis": "Number of people who hate this season",
+                    "config": {
+                        "id": "seasons_rank",
+                        "ranks": [3],
+                        "filters": [
+                            {
+                                "id": "fav_pizza",
+                                <b>"answers": [1]</b>
+                            }
+                        ]
+                    },
+                    "bars": ["Spring", "Summer", "Autumn", "Winter"]
+                },
+                {
+                    "title": "Least Favorite Seasons for Meat Lovers",
+                    "x-axis": "Season",
+                    "y-axis": "Number of people who hate this season",
+                    "config": {
+                        "id": "seasons_rank",
+                        "ranks": [3],
+                        "filters": [
+                            {
+                                "id": "fav_pizza",
+                                <b>"answers": [2]</b>
+                            }
+                        ]
+                    },
+                    "bars": ["Spring", "Summer", "Autumn", "Winter"]
+                }
+            ]
+        },
+        ...
+    ]
+}
+</pre>
+
+To see what this graph looks like, visit the [example-outputs folder](https://github.com/xumaple/google-form-response-parser/blob/master/example-outputs/least_favorite_seasons_by_pizza.jpg). Note that this is just a 2-by-2 subplot, and our JSON is already extremely long and full of long sections that were mainly copy-pasted, except for a line or two or change. For larger subplots, the JSON would easily become unmanageable
+
+Thus, there is one shortcut field that can be used to change: the `sort-by`field, which takes in the question ID of the question to be varied-by-answer. It takes the place of the filter that specifically limits to one of the answers to said question, and is a field within the `analysis/sub-plot/config` subpath. Take a look at the following example: 
+
+(For fun, let's also transform the sub-plots into a different shape)
+
+<pre>
+{
+    ...
+    "analysis": [
+        {
+            "nrows": 2,
+            "ncols": 2,
+            "save-as": "least_favorite_seasons_by_pizza<b>_with_shortcut</b>.jpg",
+            "sub-plots": [
+                {
+                    "title": "Least Favorite Seasons",
+                    "x-axis": "Season",
+                    "y-axis": "Number of people who hate this season",
+                    "config": {
+                        "id": "seasons_rank",
+                        "ranks": [3]
+                    },
+                    "bars": ["Spring", "Summer", "Autumn", "Winter"]
+                }, 
+                {
+                    <b>"title": "Least Favorite Seasons"</b>,
+                    "x-axis": "Season",
+                    "y-axis": "Number of people who hate this season",
+                    "config": {
+                        "id": "seasons_rank",
+                        "ranks": [3],
+                        <b>"sort-by": "fav_pizza",
+                        "filters": []</b>
+                    },
+                    "bars": ["Spring", "Summer", "Autumn", "Winter"]
+                }
+            ]
+        },
+        ...
+    ]
+}
+</pre>
+
+Comparing [this graph](https://github.com/xumaple/google-form-response-parser/blob/master/example-outputs/least_favorite_seasons_by_pizza_with_shortcut.jpg) with the previous, although the subplots are in a different shape (1x4 instead of 2x2), the graphs themselves are the same, but this version that uses the shortcut is much shorter. In fact, the shortcut is only being used in the latter of the two sub-plots in this example - the former is just a regular sub-plot. This shortcut is super useful! Some notes/caveats:
+
++ The restriction that `nrows * ncols` is equal to the number of elements in sub_plots still applies. When the sort-by shortcut is used, FRP is actually automatically generating the other sub-plots before checking this restriction. 
++ When the `sort-by` field is used, FRP will always generate 1 sub-plot per answer for the question specified. If the user wants to use a different algorithm to plot the sub-plots, it is not supported by this shortcut. 
++ FRP will always generate the sub-plots in order of the answers specifed in the JSON file. Thus, when they are plotted into the plot as a whole, they will also follow this order. If the user wants to use a different order, it is not supported by this shortcut. 
++ Note that using the `sort-by` field does not disqualify this sub-plot from using other filters. However, any such filters used in the same sub-plot as the `sort-by` field will be used in all sub-plots automatically that FRP generates from this field, as well. 
++ Note that the titles for each respective sub-plot is the only significant  difference between the two examples. This is because FRP automatically appends the answer used to the beginning of the sub-plot, for clarity and differentiation of the sub-plots. FRP does not currently support turning off this feature, or using custom titles/axis-labels for each automatically generated sub-plot. 
+
+Happy plotting!
 
 ## Misc.
 
