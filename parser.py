@@ -37,7 +37,7 @@ def importData(configs):
     return ret
 
 def readRow(sheet, row):
-    return [str(sheet.cell(row, i).value) for i in range(2, sheet.ncols)]
+    return [str(sheet.cell(row, i).value) for i in range(1, sheet.ncols)]
 
 def defaultIndex(arr, val, default=None):
     if isinstance(val, str):
@@ -122,8 +122,11 @@ def ingestXLS(configs):
 
         for ranked in ranked_questions:
             datum[ranked[0]] = [datum[i][0] for i in ranked]
-        for extra in extra_indices:
-            del datum[extra]
+        # for extra in extra_indices:
+            # del datum[extra]
+            # for i in range(extra, len(datum)):
+            #     print(datum)
+            #     datum[i] -= 1
         data.append(datum)
 
         if DEBUG_BREAK_EARLY:
@@ -175,11 +178,13 @@ def analyzeData(configs, data, question_answers, ids):
             filtered_data = data
             filters = conf.get('filters')
             if filters is not None:
+                # pprint(filtered_data)
                 for f in filters:
                     question_index = ids[f['id']]
                     form = question_answers[ids[f['id']]][1]
                     filtered_data = filter(lambda datum: filter_data(datum[question_index], f, form), filtered_data)
                 filtered_data = list(filtered_data)
+                # print('\n', filtered_data)
             form = question_answers[ids[conf['id']]][1]
             if form == 'ranked':
                 scores, num_responses = score_ranked(conf, filtered_data, question_answers, ids)
@@ -313,7 +318,6 @@ def filter_data(datum, f, form):
     return datum[0] in f.get('answers')
 
 def add_filter(sub_plot, id, answer_num, answer):
-    print(answer)
     new_sub_plot = copy.deepcopy(sub_plot)
     filters = new_sub_plot['config'].get('filters')
     if filters is None:
@@ -351,4 +355,5 @@ if __name__ == "__main__":
         print('ERROR: Could not load json file', sys.argv[1])
         exit(1)
     data, qs, ids = importData(configs)
+    print(ids)
     analyzeData(configs, data, qs, ids)

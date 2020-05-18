@@ -26,13 +26,13 @@
             "title": "People Who Like Cheerios's Favorite Pizzas",
             "x-axis": "Pizza type",
             "y-axis": "Number of people who like this pizza",
-            "save-as": "cheerio_lovers_fav_pizzas",
+            "save-as": "cheerio_lovers_fav_pizzas.jpg",
             "config": {
                 "id": "fav_pizza",
                 "filters": [
                     {
                         "id": "cereal_weeee",
-                        "answers": [1]
+                        "answers": [0]
                     }
                 ],
                 "percentage": false

@@ -1,5 +1,5 @@
 # What is the Google Forms Response Parser (FRP)?
-In using Google Forms for any sort of data collection, oftentimes the native data analyzer provided by Google, adn the excel files that come with it, are not sufficient for analyzing data, especially for combining and viewing/analyzing data from multiple variable perspectives at once. 
+In using Google Forms for any sort of data collection, oftentimes the native data analyzer provided by Google, and the excel files that come with it, are not sufficient for analyzing data, especially for combining and viewing/analyzing data from multiple variable perspectives at once. 
 
 FRP attempts to make analyzing data easier by taking in either the Google-Form output excel sheet or a native Form-editing web link (coming soon!) and graphing that data in easy-to-configure ways using python's matplotlib. 
 
@@ -34,7 +34,7 @@ All flags are optional:
 
 ## Configuring the JSON
 
-This section will reference the *example.json* file in this repository. It is paired with the *example.xls* file (also in this repo), and together they will serve as this tutorial's main source of reference. The *example.xls* file was generated from responses to [this form](https://forms.gle/5EihhpiSNxchXT1j6).
+This section will reference the *example.json* file in this repository. It is paired with the *example.xls* file (also in this repo), and together they will serve as this tutorial's main source of reference. The *example.xls* file was generated from responses to [this form](https://forms.gle/5EihhpiSNxchXT1j6), and the files generated from each example are saved to the `example-outputs` directory of this repo.
 
 ### Input/Output
 The main level of the JSON contains the basic input/output information that FRP uses., such as the excel filename and its respective sheet name, as well as the output directory of all graphs that will be saved to disk. 
@@ -189,13 +189,13 @@ However, what if we only wanted to see this result for the people who like Honey
             "title": "People<b> Who Like Cheerios</b>'s Favorite Pizzas",
             "x-axis": "Pizza type",
             "y-axis": "Number of people who like this pizza",
-            "save-as": "<b>cheerio_lovers</b>_fav_pizzas",
+            "save-as": "<b>cheerio_lovers</b>_fav_pizzas.jpg",
             "config": {
                 "id": "fav_pizza",
                 <b>"filters": [
                     {
                         "id": "cereal_weeee",
-                        "answers": [1]
+                        "answers": [0]
                     }
                 ],</b>
                 "percentage": false
@@ -213,7 +213,7 @@ This example outlines the most basic graphing use case. For more complex situati
 Specifically for graphing ***ranked-format*** questions, there are two more identifiers within the `analysis/config` subpath that can be used:
 
 +  `ranks` is an identifier to a list which signifies the specific answer ranks that are handled per user, eg. only looking at each user's most or least ranked item, or a variety.
-+  `answer` is a unique identifier which changes the x-axis of the graph from being one-answer-per-bar, to one-rank-per-bar. Thus, the number of bars for this graph
++  `answer` is a unique identifier which changes the x-axis of the graph from being one-answer-per-bar, to one-rank-per-bar. Thus, the number of bars for this graph is equal to the number of ranks specified by that question.
 
 For more information on these additional identifiers, see the [Examples](#ranked-format-specific-identifiers) section.
 
@@ -267,6 +267,8 @@ Although this parser is meant to be used in conjunction with Google Forms, which
 
 # Known bugs
 
-+ Google forms does not always require an email, thus the second column may sometimes be a question - which FRP would always ignore. Current workaround: if the user manually copies the entire second column to a new column, Google Forms will automatically place new responses there - and FRP would see it with no problems. Easy fix - coming soon!
+
++ ~~Google forms does not always require an email, thus the second column may sometimes be a question - which FRP would always ignore. Current workaround: if the user manually copies the entire second column to a new column, Google Forms will automatically place new responses there - and FRP would see it with no problems.~~ Fixed!
++ When someone chooses to select no answers for a select-all question, their data is not counted in any of the statistics. 
 
 For any questions or to report a bug, please email maplexu2010@gmail.com. Thank you for your help!
