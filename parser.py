@@ -351,9 +351,10 @@ if __name__ == "__main__":
     try:
         with open(sys.argv[1]) as inf:
             configs = json.load(inf)
-    except:
+    except Exception as e:
         print('ERROR: Could not load json file', sys.argv[1])
+        print('Error message:', e)
         exit(1)
     data, qs, ids = importData(configs)
-    print(ids)
+    # print(ids)
     analyzeData(configs, data, qs, ids)

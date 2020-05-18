@@ -34,7 +34,7 @@ All flags are optional:
 
 ## Configuring the JSON
 
-This section will reference the *example.json* file in this repository. It is paired with the *example.xls* file (also in this repo), and together they will serve as this tutorial's main source of reference. The *example.xls* file was generated from responses to [this form](https://forms.gle/5EihhpiSNxchXT1j6), and the files generated from each example are saved to the `example-outputs` directory of this repo.
+This section will reference the *example.json* file in this repository. It is paired with the *example.xls* file (also in this repo), and together they will serve as this tutorial's main source of reference. The *example.xls* file was generated from responses to [this form](https://forms.gle/D3rAS5g1ABf65N3S8), and the files generated from each example are saved to the `example-outputs` directory of this repo.
 
 ### Input/Output
 The main level of the JSON contains the basic input/output information that FRP uses., such as the excel filename and its respective sheet name, as well as the output directory of all graphs that will be saved to disk. 
@@ -74,7 +74,7 @@ To inform FRP of all the questions that it needs to analyze, we need to tell it 
 }
 ```
 
-Each question has the following identifiers: 
+Each question has the following fields: 
 
 + `question` specifies the **exact** name of a question from the Google Form, which must be placed somewhere in Row 1 of the corresponding excel. It is required.
 + `id` is a string that serves as some sort of identifying tag for this specific question. Although not required, it is highly recommended, because without it this question cannot be used in analysis. 
@@ -136,7 +136,7 @@ Once the questions have been inputted into this configuration file, we can use t
 }
 ```
 
-Each graph must be directly associated with exactly one question, and generally, the number of bars in the bar graph corresponds to the number of answers that said question has, with one-bar-per-question. Each graph has the following identifiers: 
+Each graph must be directly associated with exactly one question, and generally, the number of bars in the bar graph corresponds to the number of answers that said question has, with one-bar-per-question. The order that the bars appear in the graph therefore match the order answers are declared in the *questions* configuration, from left to right. Each graph has the following fields: 
 
 + `title` is the title of the graph. It is optional - the default is no title. 
 + `x-axis` and `y-axis` are the respective axis labels. They are optional - the default is no label.
@@ -145,7 +145,7 @@ Each graph must be directly associated with exactly one question, and generally,
     + 	`id` references the question ID that this graph is directly associated to, from which data for each of the bars of the graph are represented. It is required. 
     +  `percentage` is a boolean flag that specifies whether the bar graph data should be represented as an exact count or as a percentile of the total of every point represented by the graph. It is optional - the default value is false.
     +  `filters` is a list of filters that will be applied to the dataset to limit the amount of data displayed by the graph. It is optional - the default is no filters. FRP supports the following types of filters:
-        +  Filtering by another question, with the following identifiers:
+        +  Filtering by another question, with the following fields:
             +  `id` refers to the question ID of the question in which data will be filtered. It is required. 
             +  `answers` is a list that represents the specific whitelisted answers of that question that will be allowed through the filter. It is optional; however, if not specified, all data will be filtered out. Answers in the list are not specified by their exact values, but rather by the indices of the answers declared earlier in the JSON questions section. (For further clarification, see the [Examples](#using-filters) section.)
 
@@ -206,42 +206,130 @@ However, what if we only wanted to see this result for the people who like Honey
 }
 </pre>
 
-This example outlines the most basic graphing use case. For more complex situations, see the [Examples](#example-use-cases) section.
+Both of the graphs generated from this example can be found in the [output-examples folder](https://github.com/xumaple/google-form-response-parser/tree/master/example-outputs). This example outlines the most basic graphing use case. For more complex situations, see the [Examples](#example-use-cases) section.
 
-#### Other identifiers
+#### Other fields
 
-Specifically for graphing ***ranked-format*** questions, there are two more identifiers within the `analysis/config` subpath that can be used:
+Specifically for graphing ***ranked-format*** questions, there are two more fields within the `analysis/config` subpath that can be used:
 
-+  `ranks` is an identifier to a list which signifies the specific answer ranks that are handled per user, eg. only looking at each user's most or least ranked item, or a variety.
-+  `answer` is a unique identifier which changes the x-axis of the graph from being one-answer-per-bar, to one-rank-per-bar. Thus, the number of bars for this graph is equal to the number of ranks specified by that question.
++  `ranks` is an field to a list which signifies the specific answer ranks that are handled per user, eg. only looking at each user's most or least ranked item, or a variety.
++  `answer` is a unique field which changes the x-axis of the graph from being one-answer-per-bar, to one-rank-per-bar. Thus, the number of bars for this graph is equal to the number of ranks specified by that question.
 
-For more information on these additional identifiers, see the [Examples](#ranked-format-specific-identifiers) section.
+Only one of these fields can be used for each ranked-format graph, and they are otherwise optional. Including them in any non-ranked-format graph will not produce any effect. For more information on these additional fields, see the [Examples](#ranked-format-specific-fields) section.
 
 #### Graphing Sub-plots
 
 One of *matplotlib*'s biggest features is allowing users to plot several sub-plots in the same picture. FRP also leverages this, but in a more organized fashion. 
 
-For each graph, if the graph contains the following three identifiers, then FRP will graph sub-plots instead of the regular graph: 
+For each graph, if the graph contains the following three fields, then FRP will graph sub-plots instead of the regular graph: 
 
 + `n-rows` and `n-cols` are positive integers which signify the number of rows and columns, respectively, of sub-plots the graph should contain. 
 + `sub-plots` is a list of all individual configurations for the sub-plots. The number of elements in this list must be equal to `n-rows * n-cols`. When graphing, they will be graphed in standard English reading order, ie. left-to-right, top-to-bottom. 
 
-Then, except for `save-as`, which remains as the graph's optional identifier, all other identifiers are expected to exist (if not optional) within each of the elements of the `sub-plots` list. 
+Then, except for `save-as`, which remains as the graph's optional field, all other fields are expected to exist (if not optional) within each of the elements of the `sub-plots` list. 
 
 For more detailed information, see the [Examples](#sub-plot-examples) section.
 
 
 ### Example use cases
 
-This section will continue to use the *examples.xls* in this repo. It will also continue to use the same *examples.json* file, except we will add additional graphs to the `analysis` subpath. 
+This section will continue to use the *examples.xls* in this repo, drawn from the [google form](https://forms.gle/D3rAS5g1ABf65N3S8) (which we strongly recommend taking a look at before looking at these more complex examples). It will also continue to use the same *examples.json* file, except we will add additional graphs to the `analysis` subpath. As before, all changes will be in bold for easier reading.
 
 #### Using filters
 
-*To be updated soon*
+What if we wanted to see how people like pizza, but only if they like either Cheerios or Lucky Charms? This is a case in which we can use multiple answers in the filter, such that having either answer allows the user to be whitelisted through the filter: 
 
-#### Ranked format-specific identifiers
+<pre>
+{
+    ...
+            "save-as": "cheerio_<b>or_lucky_</b>lovers_fav_pizzas.jpg",
+            ...
+                "filters": [
+                    {
+                        "id": "cereal_weeee",
+                        <b>"answers": [0, 2]</b>
+                    }
+    ...
+}
+</pre>
 
-*To be updated soon*
+However, what if we wanted to see how people like pizza, but only if they like Cheerios ***and*** Lucky Charms? In this case, the single filter doesn't work, so we instead need two filters of the same question, to indirectly perform a logical *and* as a filter:
+
+<pre>
+{
+    ...
+            "save-as": "cheerio_<b>and</b>_lucky_lovers_fav_pizzas.jpg",
+            ...
+                "filters": [
+                    {
+                        "id": "cereal_weeee",
+                        <b>"answers": [0]</b>
+                    }, 
+                    <b>{
+                        "id": "cereal_weeee",
+                        <b>"answers": [2]</b>
+                    }</b>
+    ...
+}
+</pre>
+
+Although we won't show an example of this, do note that one graph can definitely have multiple filters that each filter based on different questions - they don't have to all refer to one question like this example does. (Because this is a simple dataset, we simply don't have enough questions for more complex filtering.)
+
+#### Ranked format-specific fields
+
+This section refers to fields which help specifically with visualizing ranked-format data: the `ranks` and `answer` field. Because we can only work with ranked-format questions, we will definitely be working with the example question regarding people's favorite seasons; however, if we desire to, we can still choose to filter our data based on other non-ranked-format questions.
+
+##### Using the *ranks* field
+
+Suppose I want to see each person's least favorite season. The `ranks` field is perfect for this use case: 
+
+<pre>
+{
+    ...
+    "analysis": [
+        {
+            "title": "Least Favorite Seasons",
+            "x-axis": "Season",
+            "y-axis": "Number of people who hate this season",
+            "save-as": <b>"least_favorite_seasons.jpg"</b>,
+            "config": {
+                "id": <b>"seasons_rank"</b>,
+                <b>"ranks": [3]</b>
+            },
+            "bars": <b>["Spring", "Summer", "Autumn", "Winter"]</b>
+        }
+    ]
+}
+</pre>
+
+Notice that the `ranks` field is a list, so for example, if we wanted to see a combination of people's preferences (eg. last two choices, or first and last), then we just need to add other indices to the list (eg. [2, 3] or [0, 3], respectively). 
+
+##### Using the *answer* field
+
+Suppose I want to see where people tended to rank Summer among their seasons. That's what the `answer` field is for: 
+
+<pre>
+{
+    ...
+    "analysis": [
+        {
+            "title": "How Much People Like Summer",
+            "x-axis": "People's reactions",
+            "y-axis": "Number of people who like summer this much",
+            "save-as": <b>"summer.jpg"</b>,
+            "config": {
+                "id": "seasons_rank",
+                <b>"answer": 1</b>
+            },
+            "bars": <b>["Love it!", "Pretty good", "Meh", "I hate it :("]</b>
+        }
+    ]
+}
+</pre>
+
+Notice that the `bars` field is no longer listing out labels for answers to the question, but rather rankings (this is described in [Other fields](#other fields)). Also notice that the `answer` field is a single value, so it is not possible to see how people rank multiple answers at once, at that does not have much plausible semantic value (but, if this is a requested feature, it can be implemented!).
+
+Although we won't show an example of this, each of these ranked-format fields can still be used in conjunction with filters of non-ranked questions. Using any such filters simply filters out data points as specified by each filter, before either of these fields analyze the data used in the graph.  
 
 #### Sub-plot Examples
 
@@ -270,5 +358,6 @@ Although this parser is meant to be used in conjunction with Google Forms, which
 
 + ~~Google forms does not always require an email, thus the second column may sometimes be a question - which FRP would always ignore. Current workaround: if the user manually copies the entire second column to a new column, Google Forms will automatically place new responses there - and FRP would see it with no problems.~~ Fixed!
 + When someone chooses to select no answers for a select-all question, their data is not counted in any of the statistics. 
++ Depending on the default size of matplotlib figures, sometimes axes/titles will overlap, especially when sub-plots are being used, creating very messy graphs.
 
 For any questions or to report a bug, please email maplexu2010@gmail.com. Thank you for your help!
