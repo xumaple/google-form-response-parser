@@ -14,9 +14,26 @@ VERBOSE = False
 SHOW_OTHERS = False
 DEBUG_BREAK_EARLY = False
 NO_ANSWER_FLAG = '_'
+contact_admin_str = "Please contact the FRP admin for more details."
 
 def plotConfig():
     plt.style.use('seaborn')
+
+class FRPError(Exception):
+    '''Base class for other exceptions'''
+    pass
+
+class JsonFRPError(FRPError):
+    def __init__(self, msg):
+        super().__init__('FRP Json ERROR: {}'.format(msg))
+
+class RuntimeFRPError(FRPError):
+    def __init__(self, msg):
+        super().__init__('FRP ERROR: {}'.format(msg))
+
+class InternalFRPError(FRPError):
+    def __init__(self, msg):
+        super().__init__('FRP Internal ERROR: {}\n'.format(msg, contact_admin_str))
 
 class Question:
     NO_ANSWER_FLAG = NO_ANSWER_FLAG
@@ -81,7 +98,7 @@ class Question:
 
     def check_configured(self, keyword):
         if not hasattr(self, keyword):
-            self.error("Question must be configured before answers can be added")
+            raise InternalFRPError("Question must be configured before answers can be added.")
 
     def errorConfigureRow(self):
         if not self.optional:
@@ -92,10 +109,10 @@ class Question:
             self.error("Did not find answer to question")
 
     def errorScore(self, user):
-        raise self.error("Question did not receive answer from user {}".format(user))
+        self.error("Question did not receive answer from user {}".format(user))
 
     def error(self, msg):
-        raise Exception("ERROR: {}: \n{}".format(msg, self.question))
+        raise RuntimeFRPError("{}: \n{}".format(msg, self.question))
 
 class RankedQuestion(Question):
     def __init__(self, config):
@@ -213,7 +230,7 @@ class Model:
 
     def __init__(self, instance=False):
         if not instance:
-            raise Exception("ERROR: Cannot define instance of singleton Model class")
+            raise InternalFRPError("Cannot define instance of singleton Model class")
         Model.__instance = self
         self.verbose = VERBOSE
         self.show_others = SHOW_OTHERS
@@ -229,24 +246,22 @@ class Model:
             q = self.question_map.get(q_id)
             if q is not None:
                 return q
-        raise Exception("ERROR: Did not find Question with ID {}.".format(q_id))
+        raise JsonFRPError("Did not find Question with ID {}.".format(q_id))
 
     def importData(self, jsonFileName):
         try:
             with open(jsonFileName) as inf:
                 self.configs = json.load(inf)
         except Exception as e:
-            print('ERROR: Could not load json file', sys.argv[1])
-            print('Error message:', e)
-            exit(1)
+            raise JsonFRPError('Could not load json file{}\nError message: {}'.format(sys.argv[1], e))
         self.ingestData()
 
         if self.verbose:
-            print('{} other answers were not documented.'.format(len(other_answers)))
+            perr('{} other answers were not documented.'.format(len(self.other_answers)))
         if self.show_others:
-            print('Other answers that were not documented:')
-            for a in other_answers:
-                print('\t{}'.format(a))
+            perr('Other answers that were not documented:')
+            for a in self.other_answers:
+                perr('\t{}'.format(a))
 
     def ingestData(self):
         self.question_map = {}
@@ -255,13 +270,13 @@ class Model:
         elif self.configs.get('link') is not None:
             self.ingestForm()
         else: 
-            raise Exception("ERROR: Did not find xlsFile or link field in JSON to ingest data.")
+            raise JsonFRPError("Did not find xlsFile or link field in JSON to ingest data.")
 
     def ingestXLS(self):
         filename = self.configs.get('xlsFile')
         sheetName = self.configs.get('sheetName')
         if sheetName is None:
-            raise Exception("ERROR: Did not find sheetName field to match xlsFile {}.".format(filename))
+            raise JsonFRPError("Did not find sheetName field to match xlsFile {}.".format(filename))
 
         book = open_workbook(filename, formatting_info=True)
         sheet = book.sheet_by_name(sheetName)
@@ -275,7 +290,7 @@ class Model:
             q = questionFactory(q_config)
             q.configureRow(prompts)
             if self.question_map.get(q.id) is not None:
-                raise Exception("ERROR: Question ID must be unique, found multiple questions with ID {}.".format(q.id))
+                raise JsonFRPError("Question ID must be unique, found multiple questions with ID {}.".format(q.id))
             self.question_map[q.id] = q
 
         for row in range(1,sheet.nrows):
@@ -293,7 +308,7 @@ class Model:
 
     def analyzeData(self):
         if self.question_map is None:
-            raise Exception("ERROR: Data must be ingested before it can be analyzed.")
+            raise InternalFRPError("Data must be ingested before it can be analyzed.")
         plotConfig()
         graphs = self.configs.get('analysis', [])
         generateGraphCopies(graphs)
@@ -309,7 +324,7 @@ class Model:
                 # pprint(sub_plots)
 
                 if len(sub_plots) != nrows * ncols:
-                    raise Exception("ERROR: With {} rows and {} columns, expected {} sub-plots, found {}.".format(
+                    raise JsonFRPError("With {} rows and {} columns, expected {} sub-plots, found {}.".format(
                         nrows, ncols, nrows * ncols, len(sub_plots)))
 
                 for ax, sp in zip(axes, sub_plots):
@@ -323,9 +338,9 @@ class Model:
                 fig.savefig(o)
 
                 if self.verbose:
-                    print('Saving file {} to disk.'.format(o))
+                    perr('Saving file {} to disk.'.format(o))
                     if o in saved_files:
-                        print('WARNING: File {} was already saved in this program. Overwriting.'.format(o))
+                        perr('WARNING: File {} was already saved in this program. Overwriting.'.format(o))
                     saved_files.append(o)
 
         if SHOW_PLOTS:
@@ -365,7 +380,7 @@ def barGraph(fig, ax, graph):
     for f in filters:
         f_id = f.get('id')
         if f_id is None:
-            raise Exception("ERROR: filter must have id")
+            raise JsonFRPError("filter must have id")
         filtered_users = m.getQuestionById(f_id).filter(f, filtered_users)
     q_id = conf.get('id')
     if q_id is None:
@@ -407,6 +422,9 @@ def autolabel(rects, ax, is_percentage):
 def readRow(sheet, row):
     return [str(sheet.cell(row, i).value) for i in range(0, sheet.ncols)]
 
+def perr(*args, **kwargs):
+    print(*args, file=sys.stderr, **kwargs)
+
 if __name__ == "__main__":
     if '--no-show' in sys.argv:
         SHOW_PLOTS = False
@@ -425,11 +443,21 @@ if __name__ == "__main__":
         del sys.argv[sys.argv.index('--show-others')]
 
     if len(sys.argv) != 2:
-        print('Usage: python3 parser.py [json config file]')
+        perr('Usage: python3 parser.py [json config file]')
         exit(1)
-    d = Model.instance()
-    d.importData(sys.argv[1])
-    # print(ids)
-    d.analyzeData()
+
+    try:
+        d = Model.instance()
+        d.importData(sys.argv[1])
+        # print(ids)
+        d.analyzeData()
+    except FRPError as e:
+        perr()
+        perr(e)
+        exit(1)
+    except Exception as e:
+        perr(e)
+        perr('Uncaught internal exception.', contact_admin_str)
+        exit(1)
 
 # q = RankedQuestion({'answers': [1, 2]})
