@@ -18,283 +18,379 @@ NO_ANSWER_FLAG = '_'
 def plotConfig():
     plt.style.use('seaborn')
 
-other_answers = []
-saved_files = []
+class Question:
+    NO_ANSWER_FLAG = NO_ANSWER_FLAG
+    blackListFilter = lambda x: False # Blacklist everything
+    whilteListFilter = lambda x: True # Whitelist everything
 
-def importData(configs):
-    if configs.get('xlsFile') is not None:
-        ret = ingestXLS(configs)
-    else:
-        ret = ingestForm(configs)
+    def __init__(self, config):
+        self.id = config.get('id')
+        self.question = config.get('question')
+        self.answers = config.get('answers')
+        o = config.get('optional')
+        self.optional = o is not None and o
+        self.userAnswers = {}
 
-    if VERBOSE:
-        print('{} other answers were not documented.'.format(len(other_answers)))
-    if SHOW_OTHERS:
-        print('Other answers that were not documented:')
-        for a in other_answers:
-            print('\t{}'.format(a))
+    def getAnswerIndex(self, ans):
+        try:
+            return self.answers.index(ans)
+        except ValueError:
+            Model.instance().other_answers.append(ans)
+            return Question.NO_ANSWER_FLAG
 
-    return ret
+    def configureRow(self, row):
+        try:
+            self.column = row.index(self.question)
+        except ValueError:
+            self.errorConfigureRow()
 
-def readRow(sheet, row):
-    return [str(sheet.cell(row, i).value) for i in range(1, sheet.ncols)]
+    def add_answer(self, user, row):
+        self.check_configured('column')
+        try:
+            self.add_answer_helper(user, self.getAnswerIndex(row[self.column]))
+        except IndexError:
+            self.errorAddAnswer()
 
-def defaultIndex(arr, val, default=None):
-    if isinstance(val, str):
-        val = val.strip()
-    try:
-        return arr.index(val)
-    except ValueError:
-        other_answers.append(val)
-        return val if default is None else default
+    def add_answer_helper(self, k, v):
+        if self.userAnswers.get(k) is not None:
+            self.error("Question received repeat answer key")
+        self.userAnswers[k] = v
 
-def ingestXLS(configs):
-    filename = configs.get('xlsFile')
-    sheetName = configs.get('sheetName')
-    # print(filename, sheetName)
-    book = open_workbook(filename, formatting_info=True)
-    sheet = book.sheet_by_name(sheetName)
+    def filter(self, f, users):
+        func = self.getFilter(f)
+        try:
+            return list(filter(func, users))
+        except:
+            self.error("Unable to filter based on question")
 
-    data = []
+    def getFilter(self, f):
+        answers = f.get('answers')
+        if answers is None or len(answers) == 0:
+            return Question.blackListFilter
+        return lambda x: self.userAnswers.get(x) in answers
 
-    question_parsing = {}
-    ranked_questions = []
-    question_ids = {}
-    questions = configs.get('questions')
-    if questions is not None:
-        prompts = readRow(sheet, 0)
-        for q in questions:
+    def score(self, config, users):
+        arr = np.zeros(len(self.answers))
+        for u in users:
+            ans = self.userAnswers.get(u)
+            if ans is None:
+                self.errorScore(u)
+            if ans != Question.NO_ANSWER_FLAG:
+                arr[ans] += 1
+        return score_adjustments(config, arr), np.sum(arr)
+
+    def check_configured(self, keyword):
+        if not hasattr(self, keyword):
+            self.error("Question must be configured before answers can be added")
+
+    def errorConfigureRow(self):
+        if not self.optional:
+            self.error("Did not find question")
+
+    def errorAddAnswer(self):
+        if not self.optional:
+            self.error("Did not find answer to question")
+
+    def errorScore(self, user):
+        raise self.error("Question did not receive answer from user {}".format(user))
+
+    def error(self, msg):
+        raise Exception("ERROR: {}: \n{}".format(msg, self.question))
+
+class RankedQuestion(Question):
+    def __init__(self, config):
+        super().__init__(config)
+
+    def configureRow(self, row):
+        self.columns = []
+        for i, r in enumerate(row):
+            if r[:r.rfind('[') - 1] == self.question:
+                self.columns.append(i)
+        if len(self.columns) == 0:
+            self.errorConfigureRow()
+        self.sortConfigureRow(row)
+
+    def sortConfigureRow(self, row):
+        self.check_configured('columns')
+        self.columns.sort(key=lambda i: row[i])
+
+    def add_answer(self, user, row):
+        self.check_configured('columns')
+        try:
+            ranked_answers = [self.getAnswerIndex(row[c]) for c in self.columns]
+            if Question.NO_ANSWER_FLAG in ranked_answers:
+                ranked_answers = Question.NO_ANSWER_FLAG
+            self.add_answer_helper(user, ranked_answers)
+        except IndexError:
+            self.errorAddAnswer()
+
+    def getFilter(self, f):
+        raise NotImplementedError("Ranked filters are coming soon")
+
+    def score(self, config, users):
+        specific_answer_index = config.get('answer')
+        if specific_answer_index is not None:
+            return self.scoreAnswer(config, users)
+
+        arr = np.zeros(len(self.answers))
+        weights, ranks = self.getWeightsAndRanks(config)
+        num_answers = 0
+        for u in users:
+            ans = self.userAnswers[u]
+            if ans == Question.NO_ANSWER_FLAG:
+                continue
+            for i in ranks:
+                arr[ans[i]] += (weights[i] if weights is not None else 1)
+            num_answers += 1
+        return score_adjustments(config, arr), num_answers
+
+    def getWeightsAndRanks(self, config):
+        if config.get('ranks') is not None:
+            return None, config['ranks']
+        return range(num_answers), range(num_answers)
+
+    def scoreAnswer(self, config, users):
+        arr = np.zeros(len(self.answers))
+        specific_answer_index = config.get('answer')
+        for u in users:
             try:
-                question = q['question']
-                q_format = q.get('format')
-                if q_format == 'ranked':
-                    indices = []
-                    for i, p in enumerate(prompts):
-                        if p[:p.rfind('[') - 1] == question:
-                            indices.append(i)
-                    if len(indices) == 0:
-                        raise ValueError()
-                    indices.sort(key=lambda i: prompts[i])
-                    ranked_questions.append(indices)
-                else:
-                    indices = [prompts.index(question)]
-                q_id = q.get('id')
-                if q_id is not None:
-                    question_ids[q_id] = indices[0]
-                    if q.get('answers') is None:
-                        continue
-                for i in indices:
-                    question_parsing[i] = (q['answers'], q_format)
-            except:
-                optional = q.get('optional')
-                if optional is not None and optional:
-                    continue
-                raise ValueError("Did not find answer to question: \n{}".format(q['question']))
-
-    extra_indices = [j for i in ranked_questions for j in i[1:]]
-    extra_indices.sort(reverse=True)
-
-    for row in range(1,sheet.nrows):
-        datum = readRow(sheet, row)
-
-        # Additional parsing of inputs
-        for n, d in enumerate(datum):
-            if d is not None:
-                if d == '':
-                    datum[n] = NO_ANSWER_FLAG
-                    # print(n)
-                    continue
-                if len(d) > 2 and d[-2:] == '.0':
-                    # Remove trailing .0 from ints that were read in as doubles
-                    d = int(d[0:-2])
-                    datum[n] = d
-                tup = question_parsing.get(n)
-                if tup is not None:
-                    answers, q_format = tup
-                    if q_format == 'select-all':
-                        l = d.split(',') # Assume select-all-that-apply answers don't have commas
-                        if l[-1] == '':
-                            l.pop()
-                    else: 
-                        l = [d]
-
-                    datum[n] = [defaultIndex(answers, i) for i in l]
-
-        for ranked in ranked_questions:
-            datum[ranked[0]] = [datum[i][0] for i in ranked]
-        # for extra in extra_indices:
-            # del datum[extra]
-            # for i in range(extra, len(datum)):
-            #     print(datum)
-            #     datum[i] -= 1
-        data.append(datum)
-
-        if DEBUG_BREAK_EARLY:
-            break
-
-    for extra in extra_indices:
-        del question_parsing[extra]
-    return data, question_parsing, question_ids
-
-def ingestForm(configs):
-    raise NotImplementedError("Coming soon")
-
-def analyzeData(configs, data, question_answers, ids):
-    plotConfig()
-    graphs = configs.get('analysis')
-    if graphs is None:
-        return
-    for graph in graphs:
-        nrows, ncols, sub_plots = graph.get('nrows'), graph.get('ncols'), graph.get('sub-plots')
-        if nrows is not None and ncols is not None and sub_plots is not None:
-            fig, axes = plt.subplots(nrows=nrows, ncols=ncols)
-            # print(type(axes))
-            while len(axes) != nrows * ncols:
-                axes = [j for i in axes for j in i]
-            
-            for i, sub in enumerate(sub_plots):
-                c = sub.get('config')
-                if c is not None:
-                    sort_by_id = c.get('sort-by')
-                    if sort_by_id is None:
-                        continue
-                    del sub['config']['sort-by']
-                    answers = question_answers[ids[sort_by_id]][0]
-                    num_answers = len(answers)
-                    for ans in range(num_answers):
-                        sub_plots.insert(i + ans + 1, add_filter(sub, sort_by_id, ans, answers[ans]))
-                    del sub_plots[i]
-
-            if len(sub_plots) != nrows * ncols:
-                # TODO error
-                print('err')
-        else:
-            fig, axes = plt.subplots()
-            sub_plots = [graph]
-            axes = [axes]
-
-        for ax, sp in zip(axes, sub_plots):
-            conf = sp['config']
-            filtered_data = data
-            filters = conf.get('filters')
-            if filters is not None:
-                # pprint(filtered_data)
-                for f in filters:
-                    question_index = ids[f['id']]
-                    form = question_answers[ids[f['id']]][1]
-                    filtered_data = filter(lambda datum: filter_data(datum[question_index], f, form), filtered_data)
-                filtered_data = list(filtered_data)
-                # print('\n', filtered_data)
-            form = question_answers[ids[conf['id']]][1]
-            if form == 'ranked':
-                scores, num_responses = score_ranked(conf, filtered_data, question_answers, ids)
-            elif form == 'select-all':
-                scores, num_responses = score_select_all(conf, filtered_data, question_answers, ids)
-            elif form is None:
-                scores, num_responses = score_regular(conf, filtered_data, question_answers, ids)
-            else:
-                NotImplementedError("no such type")
-            labels = range(len(scores))
-            if sp.get('bars') is not None:
-                labels = sp['bars']
-            # print(labels, scores)
-            bars = ax.bar(labels, scores)
-            if not sp.get('no-show-responses') == True:
-                autolabel(bars, ax, conf.get('percentage'))
-
-            title, x, y = sp.get('title'), sp.get('x-axis'), sp.get('y-axis')
-            if title is not None:
-                ax.set_title(title + ' - {} responses'.format(num_responses) if not sp.get('no-show-responses') == True else '')
-            if x is not None:
-                ax.set_xlabel(x)
-            if y is not None:
-                ax.set_ylabel(y)
-
-        if SAVE_PLOTS and graph.get('save-as') is not None:
-            output_dir = configs.get('output-dir')
-            if output_dir is None:
-                output_dir = ''
-            o = output_dir + graph['save-as']
-            fig.savefig(o)
-
-            if VERBOSE:
-                print('Saving file {} to disk.'.format(o))
-                if o in saved_files:
-                    print('WARNING: File {} was already saved in this program. Overwriting.'.format(o))
-                saved_files.append(o)
-
-    if SHOW_PLOTS:
-        plt.show()
-
-def score_ranked(config, data, question_answers, ids):
-    answers = get_answers(config, data)
-    num_answers = len(answers[0])
-    scores = np.zeros(num_answers)
-
-    specific_answer_index = config.get('answer')
-    if specific_answer_index is not None:
-        for user_answers in answers:
-            try:
-                scores[user_answers.index(specific_answer_index)] += 1
+                arr[self.userAnswers[u].index(specific_answer_index)] += 1
             except ValueError:
                 pass
-        return score_adjustments(config, scores), len(answers)
+        return score_adjustments(config, arr), np.sum(ar)
 
-    weighted, ranks = True, range(num_answers)
-    if config.get('ranks') is not None:
-        ranks = config.get('ranks')
-        weighted = False
-    for user_answers in answers:
-        for i in ranks:
-            scores[user_answers[i]] += (i if weighted else 1)
+class SelectAllQuestion(Question):
+    def __init__(self, config):
+        super().__init__(config)
 
-    if weighted:
-        return score_adjustments(config, np.vectorize(lambda x: num_answers * len(answers) - x)(scores)), len(answers)
-    return score_adjustments(config, scores), len(answers)
-
-def score_select_all(config, data, question_answers, ids):
-    answers = get_answers(config, data)
-    # print(question_answers[ids[config['id']]][0])
-    num_answers = len(question_answers[ids[config['id']]][0])
-    scores = np.zeros(num_answers)
-
-    for user_answers in answers:
-        # # scores[tuple(list(filter(lambda x: x >= 0 and x < num_answers, user_answers)))] += 1 # TODO
-        # try:
-        #     scores[tuple(user_answers)] += 1
-        # except:
-        #     pass
-
-        for a in user_answers:
-            try:
-                scores[a] += 1
-            except:
-                pass
-    return score_adjustments(config, scores), len(answers)
-
-def score_regular(config, data, question_answers, ids):
-    answers = get_answers(config, data)
-    num_answers = len(question_answers[ids[config['id']]][0])
-    scores = np.zeros(num_answers)
-
-    for a in answers:
+    def add_answer(self, user, row):
+        self.check_configured('column')
         try:
-            scores[a[0]] += 1
-        except:
-            pass
+            answers = row[self.column].split(', ') # Assume select-all-that-apply answers don't have commas
+            if answers[-1] == '':
+                answers.pop()
+        except IndexError:
+            self.errorAddAnswer()
+        indexed_answers = [self.getAnswerIndex(a) for a in answers]
+        filtered_answers = list(filter(lambda a: a != Question.NO_ANSWER_FLAG, indexed_answers))
+        self.add_answer_helper(user, filtered_answers)
 
-    return score_adjustments(config, scores), len(answers)
+    def getFilter(self, f):
+        answers = f.get('answers')
+        if answers is None or len(answers) == 0:
+            return Question.blackListFilter
+
+        return lambda x: any([a in answers for a in self.userAnswers.get(x)])
+
+    def score(self, config, users):
+        arr = np.zeros(len(self.answers))
+        num_answers = 0
+        for u in users:
+            ans = self.userAnswers.get(u)
+            if ans is None:
+                self.errorScore(u)
+            for a in ans:
+                arr[a] += 1
+            num_answers += 1
+        return score_adjustments(config, arr), num_answers
+
+def questionFactory(config):
+    form = config.get('format')
+    if form == 'ranked':
+        return RankedQuestion(config)
+    elif form == 'select-all':
+        return SelectAllQuestion(config)
+    else:
+        return Question(config)
+
+class Model:
+    __instance = None
+
+    def instance():
+        if Model.__instance is None:
+            Model(instance=True)
+        return Model.__instance
+
+    def __init__(self, instance=False):
+        if not instance:
+            raise Exception("ERROR: Cannot define instance of singleton Model class")
+        Model.__instance = self
+        self.verbose = VERBOSE
+        self.show_others = SHOW_OTHERS
+
+        self.question_map = None
+        self.num_users = 0
+
+        self.other_answers = []
+        self.saved_files = []
+
+    def getQuestionById(self, q_id):
+        if self.question_map is not None:
+            q = self.question_map.get(q_id)
+            if q is not None:
+                return q
+        raise Exception("ERROR: Did not find Question with ID {}.".format(q_id))
+
+    def importData(self, jsonFileName):
+        try:
+            with open(jsonFileName) as inf:
+                self.configs = json.load(inf)
+        except Exception as e:
+            print('ERROR: Could not load json file', sys.argv[1])
+            print('Error message:', e)
+            exit(1)
+        self.ingestData()
+
+        if self.verbose:
+            print('{} other answers were not documented.'.format(len(other_answers)))
+        if self.show_others:
+            print('Other answers that were not documented:')
+            for a in other_answers:
+                print('\t{}'.format(a))
+
+    def ingestData(self):
+        self.question_map = {}
+        if self.configs.get('xlsFile') is not None:
+            self.ingestXLS()
+        elif self.configs.get('link') is not None:
+            self.ingestForm()
+        else: 
+            raise Exception("ERROR: Did not find xlsFile or link field in JSON to ingest data.")
+
+    def ingestXLS(self):
+        filename = self.configs.get('xlsFile')
+        sheetName = self.configs.get('sheetName')
+        if sheetName is None:
+            raise Exception("ERROR: Did not find sheetName field to match xlsFile {}.".format(filename))
+
+        book = open_workbook(filename, formatting_info=True)
+        sheet = book.sheet_by_name(sheetName)
+
+        questions = self.configs.get('questions')
+        if questions is None:
+            return
+
+        prompts = readRow(sheet, 0)
+        for q_config in questions:
+            q = questionFactory(q_config)
+            q.configureRow(prompts)
+            if self.question_map.get(q.id) is not None:
+                raise Exception("ERROR: Question ID must be unique, found multiple questions with ID {}.".format(q.id))
+            self.question_map[q.id] = q
+
+        for row in range(1,sheet.nrows):
+            datum = readRow(sheet, row)
+            self.num_users += 1
+
+            for q in self.question_map.values():
+                q.add_answer(row, datum)
+
+            if DEBUG_BREAK_EARLY:
+                break
+
+    def ingestForm(self):
+        raise NotImplementedError("Coming soon")
+
+    def analyzeData(self):
+        if self.question_map is None:
+            raise Exception("ERROR: Data must be ingested before it can be analyzed.")
+        plotConfig()
+        graphs = self.configs.get('analysis', [])
+        generateGraphCopies(graphs)
+        for graph in graphs:
+            nrows, ncols, sub_plots = graph.get('nrows'), graph.get('ncols'), graph.get('sub-plots')
+            if nrows is not None and ncols is not None and sub_plots is not None:
+                fig, axes = plt.subplots(nrows=nrows, ncols=ncols)
+                while len(axes) != nrows * ncols:
+                    axes = [j for i in axes for j in i]
+
+                generateGraphCopies(sub_plots)
+
+                # pprint(sub_plots)
+
+                if len(sub_plots) != nrows * ncols:
+                    raise Exception("ERROR: With {} rows and {} columns, expected {} sub-plots, found {}.".format(
+                        nrows, ncols, nrows * ncols, len(sub_plots)))
+
+                for ax, sp in zip(axes, sub_plots):
+                    barGraph(fig, ax, sp)
+            else:
+                fig, ax = plt.subplots()
+                barGraph(fig, ax, graph)
+
+            if SAVE_PLOTS and graph.get('save-as') is not None:
+                o = self.configs.get('output-dir', '') + graph['save-as']
+                fig.savefig(o)
+
+                if self.verbose:
+                    print('Saving file {} to disk.'.format(o))
+                    if o in saved_files:
+                        print('WARNING: File {} was already saved in this program. Overwriting.'.format(o))
+                    saved_files.append(o)
+
+        if SHOW_PLOTS:
+            plt.show()
+
+def generateGraphCopies(graphsList):
+    data = Model.instance()
+    for i, graph in enumerate(graphsList):
+        config = graph.get('config', {})
+        sort_by_id = config.get('sort-by')
+        if sort_by_id is None:
+            continue
+        del graph['config']['sort-by']
+        answers = data.getQuestionById(sort_by_id).answers
+        for j, ans in enumerate(answers):
+            new_graph = add_filter(graph, sort_by_id, [j])
+            title = new_graph.get('title', '')
+            new_graph['title'] = '{}{}{}'.format(ans.capitalize(), ': ' if title != '' else '', title)
+            graphsList.insert(i + j + 1, new_graph)
+        del graphsList[i]
+
+def add_filter(graph, id, answers):
+    new_graph = copy.deepcopy(graph)
+    filters = new_graph['config'].get('filters')
+    if filters is None:
+        filters = []
+        new_graph['config']['filters'] = filters
+    filters.append({"id": id, "answers": answers})
     
+    return new_graph
 
-def get_answers(config, data):
-    index = ids[config['id']]
-    answers = [data[i][index] for i in range(len(data))]
-    # pprint(data)
-    return list(filter(lambda x: x != NO_ANSWER_FLAG, answers))
+def barGraph(fig, ax, graph):
+    m = Model.instance()
+    conf = graph['config']
+    filtered_users = range(1, m.num_users + 1)
+    filters = conf.get('filters', [])
+    for f in filters:
+        f_id = f.get('id')
+        if f_id is None:
+            raise Exception("ERROR: filter must have id")
+        filtered_users = m.getQuestionById(f_id).filter(f, filtered_users)
+    q_id = conf.get('id')
+    if q_id is None:
+        raise Exception("Graph config must have ID field.")
+    
+    scores, num_responses = m.getQuestionById(q_id).score(conf, filtered_users)
+    labels = labels = graph['bars'] if graph.get('bars') is not None else range(len(scores))
+        
+    bars = ax.bar(labels, scores)
+
+    if not graph.get('no-show-responses') == True:
+        autolabel(bars, ax, conf.get('percentage'))
+
+    title = graph.get('title')
+    if title is not None:
+        ax.set_title(title + ' - {} responses'.format(int(num_responses)) if not graph.get('no-show-responses') == True else '')
+    elif not graph.get('no-show-responses') == True:
+        ax.set_title('{} responses'.format(num_responses))
+    ax.set_xlabel(graph.get('x-axis', ''))
+    ax.set_ylabel(graph.get('y-axis', ''))
 
 def score_adjustments(config, scores):
     return np.vectorize(lambda x: x / np.sum(scores))(scores) if config.get('percentage') else scores
 
+# Source: https://stackoverflow.com/questions/30228069/how-to-display-the-value-of-the-bar-on-each-bar-with-pyplot-barh
 def autolabel(rects, ax, is_percentage):
     """Attach a text label above each bar in *rects*, displaying its height."""
     for rect in rects:
@@ -308,25 +404,8 @@ def autolabel(rects, ax, is_percentage):
                     textcoords="offset points",
                     ha='center', va='bottom')
 
-def filter_data(datum, f, form):
-    # print(datum)
-    answers = f.get('answers')
-    if answers is None or len(answers) == 0:
-        return False
-    if form == 'ranked':
-        raise NotImplementedError("Coming soon")
-    return datum[0] in f.get('answers')
-
-def add_filter(sub_plot, id, answer_num, answer):
-    new_sub_plot = copy.deepcopy(sub_plot)
-    filters = new_sub_plot['config'].get('filters')
-    if filters is None:
-        filters = []
-        new_sub_plot['config']['filters'] = filters
-    filters.append({"id": id, "answers": [answer_num]})
-    title = new_sub_plot.get('title', '')
-    new_sub_plot['title'] = '{}{}{}'.format(answer.capitalize(), ': ' if title != '' else '', title)
-    return new_sub_plot
+def readRow(sheet, row):
+    return [str(sheet.cell(row, i).value) for i in range(0, sheet.ncols)]
 
 if __name__ == "__main__":
     if '--no-show' in sys.argv:
@@ -348,13 +427,9 @@ if __name__ == "__main__":
     if len(sys.argv) != 2:
         print('Usage: python3 parser.py [json config file]')
         exit(1)
-    try:
-        with open(sys.argv[1]) as inf:
-            configs = json.load(inf)
-    except Exception as e:
-        print('ERROR: Could not load json file', sys.argv[1])
-        print('Error message:', e)
-        exit(1)
-    data, qs, ids = importData(configs)
+    d = Model.instance()
+    d.importData(sys.argv[1])
     # print(ids)
-    analyzeData(configs, data, qs, ids)
+    d.analyzeData()
+
+# q = RankedQuestion({'answers': [1, 2]})
