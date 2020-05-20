@@ -77,11 +77,11 @@ To inform FRP of all the questions that it needs to analyze, we need to tell it 
 Each question has the following fields: 
 
 + `question` specifies the **exact** name of a question from the Google Form, which must be placed somewhere in Row 1 of the corresponding excel. It is required.
-+ `id` is a string that serves as some sort of identifying tag for this specific question. Although not required, it is highly recommended, because without it this question cannot be used in analysis. 
++ `id` is a string that serves as some sort of identifying tag for this specific question. Although not required, it is highly recommended, because without it this question cannot be used in analysis. Each quetion's ID must be unique. 
 + `answers` is a list containing all exact values that FRP should use during analysis. Although not required, it is highly recommended, because all values not included in this list will be considered "other" data that will be discarded, and printed when the `--show-others` flag is enabled.
 + `format` is a string that tells FRP to expect a special format for this question, as detailed below. It is optional - when ommitted, FRP will assume the standard question format. Supported special formats:
     + `select-all` refers to the Multiple-checkboxes type of question, where users can select any number of the given responses.
-    + `ranked` refers to a multiple-grid type system where the row describes a ranking system, and the column describes the metrics to be ranked. (For clarity, see question 3 of [this form](https://forms.gle/5EihhpiSNxchXT1j6) and the following example.) *Note that FRP currently does not support the tranposed version of this question, where columns describe the ranking system instead of the row. Furthermore, the ranking system currently only supports being sorted in rank alphabetically.*
+    + `ranked` refers to a multiple-grid type system where the row describes a ranking system, and the column describes the metrics to be ranked. (For clarity, see question 2 of [this form](https://forms.gle/5EihhpiSNxchXT1j6) and the following example.) *Note that FRP currently does not support the tranposed version of this question, where columns describe the ranking system instead of the row. Furthermore, the ranking system currently only supports being sorted in rank alphabetically.*
     + More options will become available at users' requests. 
 + `optional` is a utility-type boolean. When true, FRP will not error out if it does not find the column labelled with this question. It is optional, and false by default. *Because its use cases are not common, this tutorial does not include it in examples.*
 
@@ -153,6 +153,7 @@ Each graph must be directly associated with exactly one question, and generally,
 
         +  More options will become available at users' requests.
 + `bars` is a list of each of the graph's bars' labels. Because graphs will genearlly have one bar per answer, this method allows the user to shorten each labels' length at his own discretion by creating a new label for each answer altogether (answers on Google Forms are sometimes pretty long). It is optional - by default, numbers will be used as labels for each bar. 
++ `no-show-responses` is a boolean which changes the output on the graph. It is optional: by default it is false and the graph will append the number of total responses in that graph to the title, and also show the individual heights for each bar. Changing the boolean to `true` will remove these outputs.
 
 Given the configured filters and other miscellaneous information, FRP graphs each bar graph based on the number of users who answered each answer to the question specified at `analysis/config/id`.
 
