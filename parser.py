@@ -43,7 +43,7 @@ class Question:
     def __init__(self, config):
         self.id = config.get('id')
         self.question = config.get('question')
-        self.answers = config.get('answers')
+        self.answers = list(map(str, config.get('answers')))
         o = config.get('optional')
         self.optional = o is not None and o
         self.userAnswers = {}
@@ -94,6 +94,7 @@ class Question:
                 self.errorScore(u)
             if ans != Question.NO_ANSWER_FLAG:
                 arr[ans] += 1
+        # print(users)
         return score_adjustments(config, arr), np.sum(arr)
 
     def check_configured(self, keyword):
@@ -150,7 +151,7 @@ class RankedQuestion(Question):
             return self.scoreAnswer(config, users)
 
         arr = np.zeros(len(self.answers))
-        weights, ranks = self.getWeightsAndRanks(config)
+        weights, ranks = self.getWeightsAndRanks(config, len(self.answers))
         num_answers = 0
         for u in users:
             ans = self.userAnswers[u]
@@ -161,7 +162,7 @@ class RankedQuestion(Question):
             num_answers += 1
         return score_adjustments(config, arr), num_answers
 
-    def getWeightsAndRanks(self, config):
+    def getWeightsAndRanks(self, config, num_answers):
         if config.get('ranks') is not None:
             return None, config['ranks']
         return range(num_answers), range(num_answers)
@@ -174,7 +175,7 @@ class RankedQuestion(Question):
                 arr[self.userAnswers[u].index(specific_answer_index)] += 1
             except ValueError:
                 pass
-        return score_adjustments(config, arr), np.sum(ar)
+        return score_adjustments(config, arr), np.sum(arr)
 
 class SelectAllQuestion(Question):
     def __init__(self, config):
@@ -269,7 +270,7 @@ class Model:
             self.ingestXLS()
         elif self.configs.get('link') is not None:
             self.ingestForm()
-        else: 
+        else:
             raise JsonFRPError("Did not find xlsFile or link field in JSON to ingest data.")
 
     def ingestXLS(self):
@@ -358,7 +359,7 @@ def generateGraphCopies(graphsList):
         for j, ans in enumerate(answers):
             new_graph = add_filter(graph, sort_by_id, [j])
             title = new_graph.get('title', '')
-            new_graph['title'] = '{}{}{}'.format(ans.capitalize(), ': ' if title != '' else '', title)
+            new_graph['title'] = '{}{}'.format(title, ' ({})'.format(ans.capitalize()) if title != '' else '')
             graphsList.insert(i + j + 1, new_graph)
         del graphsList[i]
 
@@ -369,7 +370,7 @@ def add_filter(graph, id, answers):
         filters = []
         new_graph['config']['filters'] = filters
     filters.append({"id": id, "answers": answers})
-    
+
     return new_graph
 
 def barGraph(fig, ax, graph):
@@ -385,18 +386,18 @@ def barGraph(fig, ax, graph):
     q_id = conf.get('id')
     if q_id is None:
         raise Exception("Graph config must have ID field.")
-    
+
     scores, num_responses = m.getQuestionById(q_id).score(conf, filtered_users)
-    labels = labels = graph['bars'] if graph.get('bars') is not None else range(len(scores))
-        
+    labels = labels = graph['bars'] if graph.get('bars') is not None else range(1, len(scores) + 1)
+
     bars = ax.bar(labels, scores)
 
-    if not graph.get('no-show-responses') == True:
+    if not graph.get('no-show-labels') == True:
         autolabel(bars, ax, conf.get('percentage'))
 
     title = graph.get('title')
     if title is not None:
-        ax.set_title(title + ' - {} responses'.format(int(num_responses)) if not graph.get('no-show-responses') == True else '')
+        ax.set_title(title + (' - {} responses'.format(int(num_responses)) if not graph.get('no-show-responses') == True else ''))
     elif not graph.get('no-show-responses') == True:
         ax.set_title('{} responses'.format(num_responses))
     ax.set_xlabel(graph.get('x-axis', ''))
@@ -419,8 +420,13 @@ def autolabel(rects, ax, is_percentage):
                     textcoords="offset points",
                     ha='center', va='bottom')
 
+def formatAnswer(ans):
+    if ans and len(ans) >= 2 and ans[-2:] == '.0':
+        ans = ans[:-2]
+    return ans.strip()
+
 def readRow(sheet, row):
-    return [str(sheet.cell(row, i).value) for i in range(0, sheet.ncols)]
+    return list(map( formatAnswer, [str(sheet.cell(row, i).value) for i in range(0, sheet.ncols)] ))
 
 def perr(*args, **kwargs):
     print(*args, file=sys.stderr, **kwargs)
