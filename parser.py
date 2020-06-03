@@ -165,7 +165,7 @@ class RankedQuestion(Question):
     def getWeightsAndRanks(self, config, num_answers):
         if config.get('ranks') is not None:
             return None, config['ranks']
-        return range(num_answers), range(num_answers)
+        return range(num_answers)[::-1], range(num_answers)
 
     def scoreAnswer(self, config, users):
         arr = np.zeros(len(self.answers))
